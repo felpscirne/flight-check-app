@@ -1,0 +1,34 @@
+# General
+# =================================
+# Log files
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Build output / Dependencies
+# =================================
+node_modules/
+dist/
+
+# Server specific
+# =================================
+/server/node_modules
+/server/dist
+
+# Client specific
+# =================================
+/client/node_modules
+/client/dist
+
+# IDE / Editor specific
+# =================================
+.vscode/
+.idea/
+*.suo
+*.user
