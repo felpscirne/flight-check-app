@@ -1,7 +1,14 @@
 import axios from 'axios';
 
 interface AmadeusLocation {
-  iataCode: string;
+  iataCode?: string;
+  address?: {
+    stateCode?: string;
+  };
+  geoCode?: {
+    latitude: number;
+    longitude: number;
+  };
 }
 
 let amadeusToken = {
@@ -9,26 +16,16 @@ let amadeusToken = {
   expiresAt: 0,
 };
 
-/**
- * Returns the correct Amadeus API hostname based on the environment.
- */
 const getAmadeusHostname = (): string => {
   return process.env.NODE_ENV === 'production'
     ? 'api.amadeus.com'
     : 'test.api.amadeus.com';
 };
 
-/**
- * Retrieves a valid Amadeus access token, fetching a new one if the cached token is missing or expired.
- * @returns {Promise<string>} A promise that resolves to the access token.
- */
 const getAccessToken = async (): Promise<string> => {
-  // If we have a valid, non-expired token, return it from cache.
   if (amadeusToken.value && amadeusToken.expiresAt > Date.now()) {
     return amadeusToken.value;
   }
-
-  console.log('Amadeus token expired or missing, fetching new token...');
   const params = new URLSearchParams();
   params.append('grant_type', 'client_credentials');
   params.append('client_id', process.env.AMADEUS_CLIENT_ID!);
@@ -39,47 +36,54 @@ const getAccessToken = async (): Promise<string> => {
     params,
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
-
   const tokenData = response.data;
   amadeusToken = {
     value: tokenData.access_token,
-    expiresAt: Date.now() + (tokenData.expires_in * 1000), // Convert expiry from seconds to milliseconds
+    expiresAt: Date.now() + (tokenData.expires_in * 1000),
   };
-
   return amadeusToken.value!;
 };
 
-/**
- * Finds all relevant airport IATA codes for a given city name.
- * @param {string} cityName - The name of the city.
- * @returns {Promise<string[]>} A list of unique IATA codes.
- */
-export const findAirportCodes = async (cityName: string): Promise<string[]> => {
+export const findAirportCodes = async (cityName: string, stateCode?: string, countryCode?: string): Promise<string[]> => {
   const token = await getAccessToken();
   const normalizedCityName = cityName.toUpperCase();
 
+  const params: any = {
+    keyword: normalizedCityName,
+    subType: 'CITY,AIRPORT',
+  };
+
+  if (countryCode) {
+    params.countryCode = countryCode;
+  }
+
   const response = await axios.get(`https://${getAmadeusHostname()}/v1/reference-data/locations`, {
     headers: { 'Authorization': `Bearer ${token}` },
-    params: {
-      keyword: normalizedCityName,
-      subType: 'CITY,AIRPORT',
-    },
+    params: params, 
   });
 
-  if (!response.data?.data) return [];
+  if (!response.data?.data) {
+    return [];
+  }
 
-  const iataCodes: string[] = response.data.data
-    .map((loc: AmadeusLocation) => loc.iataCode)
-    .filter(Boolean); 
-  
-  return [...new Set(iataCodes)]; // Return a list of unique codes
+  let locations = response.data.data;
+
+  if (stateCode) {
+    const finalStateCode = stateCode.includes('-') ? stateCode.split('-')[1] : stateCode;
+    locations = locations.filter((loc: any) => loc.address?.stateCode === finalStateCode);
+  }
+
+  if (locations.length === 0) {
+    return [];
+  }
+
+  const iataCodes = locations
+    .map((loc: any) => loc.iataCode)
+    .filter(Boolean) as string[];
+
+  return [...new Set(iataCodes)];
 };
 
-/**
- * Fetches flight offers from Amadeus based on search parameters.
- * @param {object} searchParams - The flight search parameters.
- * @returns {Promise<any[]>} A list of simplified flight objects.
- */
 export const fetchFlightOffers = async (searchParams: any): Promise<any[]> => {
   const token = await getAccessToken();
 

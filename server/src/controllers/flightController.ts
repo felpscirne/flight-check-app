@@ -27,18 +27,33 @@ export const searchFlightsByCode = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Controller to search flights by city names.
+ * It uses the Amadeus service to find airport codes and fetch flight offers.
+ */
 export const searchFlightsByCity = async (req: Request, res: Response) => {
   try {
-    const { originCityName, destinationCityName, date, adults = '1', children = '0' } = req.body;
-    if (!originCityName || !destinationCityName || !date) {
-      return res.status(400).json({ error: 'Missing required parameters.' });
-    }
+    const {
+      originCityName,
+      destinationCityName,
+      date,
+      adults = '1',
+      children = '0',
+      originStateCode,
+      originCountryCode, 
+      destinationStateCode,
+      destinationCountryCode 
+    } = req.body;
 
-    const originAirportCodes = await findAirportCodes(originCityName);
-    const destinationAirportCodes = await findAirportCodes(destinationCityName);
+    if (!originCityName || !destinationCityName || !date) {
+        return res.status(400).json({ error: 'Missing required parameters.' });
+    }
+    
+    const originAirportCodes = await findAirportCodes(originCityName, originStateCode, originCountryCode);
+    const destinationAirportCodes = await findAirportCodes(destinationCityName, destinationStateCode, destinationCountryCode);
 
     if (originAirportCodes.length === 0 || destinationAirportCodes.length === 0) {
-      return res.status(404).json({ error: 'Could not find airports for the specified cities.' });
+        return res.status(404).json({ error: 'Could not find airports for the specified cities.' });
     }
     
     const searchParams: any = {
@@ -54,6 +69,7 @@ export const searchFlightsByCity = async (req: Request, res: Response) => {
 
     const flights = await fetchFlightOffers(searchParams);
     res.status(200).json(flights);
+
   } catch (error: any) {
     console.error("--- ERROR IN CONTROLLER (searchFlightsByCity) ---", error.response?.data || error.message);
     res.status(500).json({ message: "Error while searching flights by city." });
